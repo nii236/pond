@@ -5,14 +5,30 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/nii236/pond/pkg/bot"
+	"github.com/nii236/pond/pkg/logger"
 	"github.com/nii236/pond/pkg/pond"
+	"github.com/nii236/pond/pkg/slack"
+	"github.com/nii236/pond/pkg/stdout"
 	"gopkg.in/urfave/cli.v2"
 )
 
+var log *logger.Log
+
 func main() {
 	app := cli.App{
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:    "production",
+				Aliases: []string{"p"},
+			},
+			&cli.BoolFlag{
+				Name:    "debug",
+				Aliases: []string{"d"},
+			},
+		},
 		Commands: []*cli.Command{
 			{
 				Name:    "watch",
@@ -22,6 +38,13 @@ func main() {
 			{
 				Name:    "slack",
 				Aliases: []string{"s"},
+				Action:  runSlack,
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:    "slack-token",
+						Aliases: []string{"s"},
+					},
+				},
 			},
 			{
 				Name:    "mattermost",
@@ -33,9 +56,6 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
-	// wg := &sync.WaitGroup{}
-	// wg.Add(1)
-	// wg.Wait()
 }
 
 func listenToInput(input chan string) {
@@ -49,43 +69,36 @@ func listenToInput(input chan string) {
 
 }
 
-type BotAdaptor interface {
-	Init(chan *pond.Message, chan *pond.Message) error
-	Run()
-}
+func runSlack(c *cli.Context) error {
+	logger.New(c.Bool("production"), c.Bool("debug"))
+	log = logger.Get()
+	log.Infoln("Running in Slack mode")
+	b := bot.New()
+	go b.Run()
 
-type StdOut struct {
-	AdaptorIn chan *pond.Message
+	inChan := b.Input()
+	outChan := b.Output()
+	token := c.String("slack-token")
+	s := slack.New(token)
 
-	BotIn  chan *pond.Message
-	BotOut chan *pond.Message
-}
+	s.Init(inChan, outChan)
+	s.Run()
 
-func (s *StdOut) Init(botIn chan *pond.Message, botOut chan *pond.Message) error {
-	s.BotIn = botIn
-	s.BotOut = botOut
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	wg.Wait()
 
 	return nil
 }
 
-func (s *StdOut) Run() {
-	for {
-		select {
-		case out := <-s.BotOut:
-			fmt.Println(out.Message)
-			// fmt.Printf("%+v\n", out.Meta)
-		case in := <-s.AdaptorIn:
-			s.BotIn <- in
-		}
-	}
-}
-
 func runWatch(c *cli.Context) error {
+	logger.New(c.Bool("production"), c.Bool("debug"))
+	log = logger.Get()
 	b := bot.New()
 	inChan := b.Input()
 	outChan := b.Output()
 	adaptorIn := make(chan *pond.Message)
-	so := &StdOut{}
+	so := &stdout.Adaptor{}
 	so.AdaptorIn = adaptorIn
 	so.Init(inChan, outChan)
 
@@ -93,6 +106,7 @@ func runWatch(c *cli.Context) error {
 	go so.Run()
 
 	keyInput := make(chan string)
+
 	go listenToInput(keyInput)
 
 	for {

@@ -70,7 +70,6 @@ type Bot struct {
 
 func notFound(c *cli.Context, cmd string) {
 	fmt.Fprint(c.App.Writer, "Command not found:", cmd)
-
 }
 
 func New() *Bot {
@@ -84,20 +83,8 @@ func New() *Bot {
 				Email: "jtnguyen236@gmail.com",
 			},
 		},
-		UsageText:   "Its like a puddle but better",
-		Description: "Useful bot stuffs",
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:   "user",
-				Value:  "",
-				Hidden: true,
-			},
-			&cli.StringFlag{
-				Name:   "channel",
-				Value:  "",
-				Hidden: true,
-			},
-		},
+		UsageText:       "Its like a puddle but better",
+		Description:     "Useful bot stuffs",
 		Writer:          result,
 		ErrWriter:       result,
 		CommandNotFound: notFound,
@@ -127,6 +114,7 @@ func (b *Bot) Run() {
 
 			err := b.App.Run(strings.Fields(in.Message))
 			if err != nil {
+				b.Write([]byte(err.Error()))
 				fmt.Println(err)
 			}
 		}
