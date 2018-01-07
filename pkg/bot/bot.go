@@ -1,29 +1,81 @@
 package bot
 
 import (
+	"bufio"
 	"fmt"
+	"io"
+	"strings"
+	"text/tabwriter"
 
+	"github.com/nii236/pond/pkg/pond"
+
+	"github.com/alecthomas/template"
 	"github.com/nii236/pond/pkg/commands"
 	"gopkg.in/urfave/cli.v2" // imports as package "cli"
 )
 
-type Writer interface {
-	Write(msg string, channelID string, userID string) error
-	WriteError(msg string, channelID string, userID string) error
+func (b *Bot) Input() chan *pond.Message {
+	return b.inChan
+
 }
+
+func (b *Bot) Output() chan *pond.Message {
+	return b.outChan
+}
+
+func (bot *Bot) Write(b []byte) (int, error) {
+	meta := bot.App.Metadata
+	metaString := map[string]string{}
+	for key, value := range meta {
+		switch value := value.(type) {
+		case string:
+			metaString[key] = value
+		}
+	}
+
+	bot.outChan <- &pond.Message{
+		Message: string(b),
+		Meta:    metaString,
+	}
+	return len(b), nil
+}
+
+func helpPrinter(out io.Writer, templ string, data interface{}) {
+	funcMap := template.FuncMap{
+		"join": strings.Join,
+	}
+	cli.HelpPrinter = helpPrinter
+	bw := bufio.NewWriter(out)
+	w := tabwriter.NewWriter(bw, 1, 8, 2, ' ', 0)
+	t := template.Must(template.New("help").Funcs(funcMap).Parse(templ))
+
+	err := t.Execute(w, data)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	err = bw.Flush()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+}
+
 type Bot struct {
-	Writer Writer
+	inChan  chan *pond.Message
+	outChan chan *pond.Message
 	*cli.App
-	ArgChan chan []string
 }
 
 func notFound(c *cli.Context, cmd string) {
-	fmt.Fprintln(c.App.Writer, "Command not found:", cmd)
+	fmt.Fprint(c.App.Writer, "Command not found:", cmd)
 
 }
 
-func New(w Writer) *Bot {
-	app := &cli.App{
+func New() *Bot {
+	result := &Bot{}
+	result.App = &cli.App{
 		Name:  "Pond",
 		Usage: "HI",
 		Authors: []*cli.Author{
@@ -46,23 +98,34 @@ func New(w Writer) *Bot {
 				Hidden: true,
 			},
 		},
+		Writer:          result,
+		ErrWriter:       result,
 		CommandNotFound: notFound,
 		Commands:        commands.Commands,
 	}
 
-	argChan := make(chan []string)
-	return &Bot{
-		App:     app,
-		ArgChan: argChan,
-		Writer:  w,
-	}
+	cli.HelpPrinter = helpPrinter
+
+	result.inChan = make(chan *pond.Message)
+	result.outChan = make(chan *pond.Message)
+
+	return result
+
 }
 
 func (b *Bot) Run() {
 	for {
 		select {
-		case args := <-b.ArgChan:
-			err := b.App.Run(args)
+		case in := <-b.inChan:
+			meta := in.Meta
+			metaInterface := map[string]interface{}{}
+			for key, value := range meta {
+				metaInterface[key] = value
+			}
+
+			b.App.Metadata = metaInterface
+
+			err := b.App.Run(strings.Fields(in.Message))
 			if err != nil {
 				fmt.Println(err)
 			}

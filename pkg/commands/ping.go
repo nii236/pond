@@ -20,8 +20,7 @@ func newPingCmd() *cli.Command {
 }
 
 func runPing(c *cli.Context) error {
-	// fmt.Println("HI")
-	fmt.Fprintln(c.App.Writer, "pong")
+	fmt.Fprint(c.App.Writer, "pong")
 	return nil
 }
 

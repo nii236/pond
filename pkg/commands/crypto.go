@@ -3,11 +3,10 @@ package commands
 import (
 	"fmt"
 
-	"github.com/nii236/pond/pkg/bot"
 	"gopkg.in/urfave/cli.v2"
 )
 
-func newCryptoCmd(w bot.Writer) *cli.Command {
+func newCryptoCmd() *cli.Command {
 
 	cmd := &cli.Command{
 		Name:    "crypto",
@@ -16,7 +15,7 @@ func newCryptoCmd(w bot.Writer) *cli.Command {
 		Subcommands: []*cli.Command{
 			{
 				Name:   "all",
-				Action: cryptoAll(w),
+				Action: cryptoAll,
 			},
 		},
 	}
@@ -24,11 +23,9 @@ func newCryptoCmd(w bot.Writer) *cli.Command {
 	return cmd
 }
 
-func cryptoAll(w Writer) func(c *cli.Context) error {
-	return func(c *cli.Context) error {
-		fmt.Fprintln(c.App.Writer, c.Args().Slice())
-		return nil
-	}
+func cryptoAll(c *cli.Context) error {
+	fmt.Fprint(c.App.Writer, c.Args().Slice())
+	return nil
 }
 
 func init() {

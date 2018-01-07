@@ -7,8 +7,7 @@ import (
 	"strings"
 
 	"github.com/nii236/pond/pkg/bot"
-	"github.com/nii236/pond/pkg/commands"
-	"github.com/nii236/pond/pkg/slack"
+	"github.com/nii236/pond/pkg/pond"
 	"gopkg.in/urfave/cli.v2"
 )
 
@@ -23,7 +22,6 @@ func main() {
 			{
 				Name:    "slack",
 				Aliases: []string{"s"},
-				Action:  runSlack,
 			},
 			{
 				Name:    "mattermost",
@@ -41,43 +39,65 @@ func main() {
 }
 
 func listenToInput(input chan string) {
-	commands.Commands
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
 		input <- scanner.Text()
-
-		// wse := model.NewWebSocketEvent(model.WEBSOCKET_EVENT_POSTED, "", "hi1asgc5838y9crrcmi1gdbxhh", "63e4xhbaipnf7dtabh6surox8o", map[string]bool{})
-		// post := &model.Post{Message: line, ChannelId: "hi1asgc5838y9crrcmi1gdbxhh", UserId: "63e4xhbaipnf7dtabh6surox8o"}
-		// wse.Add("post", post.ToJson())
-		// ec <- &mattermost.Event{WebSocketEvent: wse}
 	}
 	if err := scanner.Err(); err != nil {
 		fmt.Fprintln(os.Stderr, "reading standard input:", err)
 	}
+
 }
 
-type StdOut struct{}
+type BotAdaptor interface {
+	Init(chan *pond.Message, chan *pond.Message) error
+	Run()
+}
 
-func (s *StdOut) Write(msg string, channelID string, userID string) error {
-	fmt.Println(msg)
+type StdOut struct {
+	AdaptorIn chan *pond.Message
+
+	BotIn  chan *pond.Message
+	BotOut chan *pond.Message
+}
+
+func (s *StdOut) Init(botIn chan *pond.Message, botOut chan *pond.Message) error {
+	s.BotIn = botIn
+	s.BotOut = botOut
+
 	return nil
 }
-func (s *StdOut) WriteError(msg string, channelID string, userID string) error {
-	fmt.Println(msg)
-	return nil
+
+func (s *StdOut) Run() {
+	for {
+		select {
+		case out := <-s.BotOut:
+			fmt.Println(out.Message)
+			// fmt.Printf("%+v\n", out.Meta)
+		case in := <-s.AdaptorIn:
+			s.BotIn <- in
+		}
+	}
 }
 
 func runWatch(c *cli.Context) error {
-	b := bot.New(&StdOut{})
-	argChan := b.ArgChan
-	go b.Run()
+	b := bot.New()
+	inChan := b.Input()
+	outChan := b.Output()
+	adaptorIn := make(chan *pond.Message)
+	so := &StdOut{}
+	so.AdaptorIn = adaptorIn
+	so.Init(inChan, outChan)
 
-	input := make(chan string)
-	go listenToInput(input)
+	go b.Run()
+	go so.Run()
+
+	keyInput := make(chan string)
+	go listenToInput(keyInput)
 
 	for {
 		select {
-		case line := <-input:
+		case line := <-keyInput:
 			if len(line) < 1 {
 				continue
 			}
@@ -93,30 +113,9 @@ func runWatch(c *cli.Context) error {
 				fmt.Println("Not enough args")
 				continue
 			}
-			argChan <- args
+			adaptorIn <- &pond.Message{
+				Message: strings.Join(args, " "),
+			}
 		}
 	}
-
-	// return nil
-}
-
-func runSlack(c *cli.Context) error {
-	b := bot.New(&StdOut{})
-	argChan := b.ArgChan
-	go b.Run()
-
-	input := make(chan string)
-	s := slack.New("xoxb-235722203906-DlcL76LkBPStUXcwqowVXsX0", input)
-	go s.Run()
-
-	fmt.Println("Start slack mode")
-	for {
-		select {
-		case line := <-input:
-			fmt.Println(line)
-			argChan <- strings.Fields(line)
-		}
-	}
-
-	// return nil
 }
