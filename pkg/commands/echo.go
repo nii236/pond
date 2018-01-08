@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"strings"
 
 	"gopkg.in/urfave/cli.v2"
 )
@@ -9,14 +10,15 @@ import (
 func newEchoCmd() *cli.Command {
 	return &cli.Command{
 		Name:    "echo",
-		Usage:   "copies you",
+		Usage:   "Repeats what you say",
 		Aliases: []string{"e"},
 		Action:  runEcho,
 	}
 }
 
 func runEcho(c *cli.Context) error {
-	fmt.Fprint(c.App.Writer, c.Args().Slice())
+	text := strings.Join(c.Args().Slice(), " ")
+	fmt.Fprint(c.App.Writer, text)
 	return nil
 }
 

@@ -9,9 +9,11 @@ import (
 
 	"github.com/nii236/pond/pkg/bot"
 	"github.com/nii236/pond/pkg/logger"
+	"github.com/nii236/pond/pkg/mattermost"
 	"github.com/nii236/pond/pkg/pond"
 	"github.com/nii236/pond/pkg/slack"
 	"github.com/nii236/pond/pkg/stdout"
+	"github.com/pkg/errors"
 	"gopkg.in/urfave/cli.v2"
 )
 
@@ -34,6 +36,11 @@ func main() {
 				Name:    "watch",
 				Aliases: []string{"w"},
 				Action:  runWatch,
+			},
+			{
+				Name:    "mattermost",
+				Aliases: []string{"m"},
+				Action:  runMattermost,
 			},
 			{
 				Name:    "slack",
@@ -69,6 +76,26 @@ func listenToInput(input chan string) {
 
 }
 
+func runMattermost(c *cli.Context) error {
+	logger.New(c.Bool("production"), c.Bool("debug"))
+	mm, err := mattermost.New()
+	if err != nil {
+		return errors.Wrap(err, "Could not create new Mattermost bot")
+	}
+
+	b := bot.New()
+	go b.Run()
+
+	inChan := b.Input()
+	outChan := b.Output()
+	mm.Init(inChan, outChan)
+	mm.Run()
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	wg.Wait()
+	return nil
+}
 func runSlack(c *cli.Context) error {
 	logger.New(c.Bool("production"), c.Bool("debug"))
 	log = logger.Get()

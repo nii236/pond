@@ -13,6 +13,7 @@ import (
 
 var log *logger.Log
 
+// Client is the slack adaptor
 type Client struct {
 	*slack.Client
 	*slack.RTM
@@ -23,11 +24,10 @@ type Client struct {
 	*sync.RWMutex
 }
 
+// Init will add the bot channels to the adaptor
 func (c *Client) Init(in chan *pond.Message, out chan *pond.Message) {
-	c.Lock()
 	c.botIn = in
 	c.botOut = out
-	c.Unlock()
 }
 
 func (c *Client) handleBot() {
@@ -73,11 +73,13 @@ func (c *Client) handleRTM() {
 	}
 }
 
+// Run will run the client
 func (c *Client) Run() {
 	go c.handleBot()
 	go c.handleRTM()
 }
 
+// New creates a new slack client
 func New(token string) *Client {
 	log = logger.Get()
 	api := slack.New(token)
